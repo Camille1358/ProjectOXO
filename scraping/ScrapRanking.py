@@ -6,8 +6,9 @@ url = 'https://www.shanghairanking.com/rankings/gras/2023/RS0102'
 reponse = requests.get(url)
 if reponse.ok:
     print('rep1 ok')
-    soup = BeautifulSoup(reponse.text)
-    tds = soup. findAll('td ')
-    [print (str(td) + '\n\n') for td in tds]
+    soup = BeautifulSoup(reponse.text, 'lxml')
+    tds = soup. findAll('td')
+    datas = [(str(td) + '\n\n') for td in tds]
+    print(datas)
 else:
     print('rep1 not ok')
