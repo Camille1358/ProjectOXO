@@ -2,14 +2,14 @@ import time
 import pyautogui
 
 # Les quatre derniers chiffres de votre code
-derniers_chiffres = '1234'
+derniers_chiffres = '2515'
 
 # Liste pour stocker les codes testés
 codes_testes = []
 
 # Compteur pour le nombre de combinaisons testées
 compteur = 0
-
+time.sleep(5)
 # Générer toutes les combinaisons possibles pour les deux premiers chiffres
 for i in range(10):
     for j in range(10):
@@ -28,7 +28,7 @@ for i in range(10):
         compteur += 1
         # Si 10 combinaisons ont été testées, attendre 5 secondes
         if compteur % 10 == 0:
-            time.sleep(5)
+            time.sleep(7)
 
 # Écrire les codes testés dans un fichier
 with open('codes_testes.txt', 'w') as f:
