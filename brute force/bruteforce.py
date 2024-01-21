@@ -22,6 +22,7 @@ for i in range(10):
             codes_testes.pop(0)
         # "Taper" le code comme un humain
         pyautogui.write(code_complet)
+        time.sleep(1)
         # Appuyer sur Entrée
         pyautogui.press('enter')
         # Incrémenter le compteur
