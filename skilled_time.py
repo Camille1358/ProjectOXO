@@ -7,7 +7,7 @@ import winsound
 # Configuration initiale par défaut
 defaut_attente = 210  # 3 minutes 30 secondes
 defaut_duree_bip = 5  # secondes
-defaut_volume = 100  # pourcentage (simulation)
+defaut_volume = 100  # pourcentage (simulation, non fonctionnel avec winsound)
 
 class Alarme:
     def __init__(self):
@@ -38,10 +38,13 @@ class Alarme:
 
     def jouer_bip(self):
         volume = int(scale_volume.get())
-        if volume > 0:
-            frequency = 1000  # Hz
-            duration = 500    # ms
-            winsound.Beep(frequency, duration)
+        if volume == 0:
+            return  # silence simulé
+        # winsound.Beep ne gère pas le volume, donc le son est toujours maximum
+        frequency = 1000  # Hz
+        duration = 500    # ms
+        winsound.Beep(frequency, duration)
+        # Pour un vrai contrôle du volume, utiliser pygame.mixer ou autre
 
     def demarrer(self):
         try:
@@ -70,7 +73,7 @@ class Alarme:
 alarme = Alarme()
 fenetre = tk.Tk()
 fenetre.title("Alarme Boucle Simple")
-fenetre.geometry("400x350")
+fenetre.geometry("400x250")
 fenetre.configure(bg="#f5f5f5")
 
 style = ttk.Style()
@@ -113,12 +116,12 @@ btn_stop.pack(fill="x", pady=5)
 timer_var = tk.StringVar()
 timer_var.set("Alarme arrêtée")
 timer_label = ttk.Label(frame, textvariable=timer_var, font=("Segoe UI", 12, "bold"))
-timer_label.pack(pady=10)
+timer_label.pack(pady=20)
 
-# Ajouter un label pour le décompte
-decompte_var = tk.StringVar()
-decompte_var.set("Décompte: 00:00")
-decompte_label = ttk.Label(frame, textvariable=decompte_var, font=("Segoe UI", 12, "bold"))
-decompte_label.pack(pady=10)
+# SUPPRIME : le second label de décompte
+
+# Message d'avertissement sur le volume
+warn_label = ttk.Label(frame, text="Note : Le volume n'est pas ajusté avec winsound.\nÀ 0% : silence, >0% : volume maximum.\nPour un vrai contrôle du volume, utilisez pygame.", foreground="red")
+warn_label.pack(pady=5)
 
 fenetre.mainloop()
