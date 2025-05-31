@@ -1,67 +1,64 @@
-import time
-import threading
 import tkinter as tk
-from tkinter import ttk
-import os
+import threading
+import time
+import platform
 
-# Essayez d'importer pygame pour un vrai contrôle du volume
-try:
-    import pygame
-    HAS_PYGAME = True
-except ImportError:
-    HAS_PYGAME = False
+# --- COULEURS ---
+COLOR_BG = "#111114"             # fond noir moderne
+COLOR_CARD = "#1E1E22"           # carte/timer noir-gris
+COLOR_TEXT = "#FFFFFF"           # texte blanc
+COLOR_BORDER = "#FF6B1A"         # orange pour les contours
+COLOR_BTN = "#FF6B1A"            # orange bouton
+COLOR_BTN_ACTIVE = "#FF944D"     # orange clair bouton hover
+COLOR_SLIDER = "#FF6B1A"         # orange slider
+COLOR_SLIDER_BG = "#333"         # fond barre slider
+RADIUS = 18
 
-DELAI_PAR_DEFAUT = 210
-DUREE_BIP_PAR_DEFAUT = 5
-VOLUME_PAR_DEFAUT = 100
-BIP_SOUND = "bip.wav"  # Placez un petit fichier bip.wav dans le dossier du script
+def play_beep(style, volume):
+    if volume == 0:
+        return
+    if platform.system() == "Windows":
+        import winsound
+        if style == "court":
+            winsound.Beep(1200, 120)
+        elif style == "long":
+            winsound.Beep(800, 600)
+        else:
+            winsound.Beep(1000, 300)
+    else:
+        print("\a")
 
 class Alarme:
     def __init__(self):
         self.active = False
         self.thread = None
-        self.attente = DELAI_PAR_DEFAUT
-        self.duree_bip = DUREE_BIP_PAR_DEFAUT
-        self.compteur = self.attente
         self.stop_event = threading.Event()
-        if HAS_PYGAME:
-            pygame.mixer.init()
-            if os.path.exists(BIP_SOUND):
-                self.sound = pygame.mixer.Sound(BIP_SOUND)
-            else:
-                self.sound = None
+        self.reset_values()
+
+    def reset_values(self):
+        self.attente = 210
+        self.duree_bip = 5
+        self.compteur = self.attente
 
     def boucle_alarme(self):
         self.compteur = self.attente
         while not self.stop_event.is_set():
+            update_timer(f"{self.compteur // 60:02}:{self.compteur % 60:02}")
             while self.compteur > 0 and not self.stop_event.is_set():
-                mins, secs = divmod(self.compteur, 60)
-                timer_var.set(f"{mins:02}:{secs:02}")
                 time.sleep(1)
                 self.compteur -= 1
+                update_timer(f"{self.compteur // 60:02}:{self.compteur % 60:02}")
             if self.stop_event.is_set():
                 break
-            timer_var.set("⏰ Bip ⏰")
+            update_timer("⏰ Bip ⏰")
             fin = time.time() + self.duree_bip
             while time.time() < fin and not self.stop_event.is_set():
-                self.jouer_bip()
+                beep_style = beep_style_var.get()
+                volume = int(volume_var.get())
+                play_beep(beep_style, volume)
                 time.sleep(1)
             self.compteur = self.attente
-        timer_var.set("Arrêté")
-
-    def jouer_bip(self):
-        volume = int(scale_volume.get())
-        if volume == 0:
-            return
-        if HAS_PYGAME and self.sound:
-            self.sound.set_volume(volume / 100)
-            self.sound.play()
-        else:
-            # Fallback avec winsound (Windows uniquement, pas de contrôle du volume)
-            import platform
-            if platform.system() == "Windows":
-                import winsound
-                winsound.Beep(1000, 500)
+        update_timer("Arrêté")
 
     def demarrer(self):
         try:
@@ -69,91 +66,188 @@ class Alarme:
             self.duree_bip = int(entry_duree.get())
             self.compteur = self.attente
         except ValueError:
-            timer_var.set("Erreur")
+            update_timer("Erreur")
             return
-
         if not self.active:
             self.active = True
             self.stop_event.clear()
             self.thread = threading.Thread(target=self.boucle_alarme, daemon=True)
             self.thread.start()
-            timer_var.set("En attente...")
+            update_timer(f"{self.compteur // 60:02}:{self.compteur % 60:02}")
 
     def arreter(self):
         if self.active:
             self.active = False
             self.stop_event.set()
             self.compteur = self.attente
-            timer_var.set("Arrêté")
+            update_timer("Arrêté")
 
-# --- Interface graphique moderne ---
+def rounded_entry(parent, var, font, width=10, height=2):
+    frame = tk.Frame(parent, bg=COLOR_BG, highlightbackground=COLOR_BORDER,
+                     highlightcolor=COLOR_BORDER, highlightthickness=2, bd=0)
+    entry = tk.Entry(frame, textvariable=var, font=font, width=width, bd=0,
+                     justify="center", bg=COLOR_CARD, fg=COLOR_TEXT, relief="flat",
+                     insertbackground=COLOR_TEXT, highlightthickness=0)
+    entry.pack(ipady=10, fill="x")
+    frame.pack_propagate(0)
+    return frame, entry
+
+def rounded_button(parent, text, command, font, bg=COLOR_BTN, fg=COLOR_TEXT):
+    def on_enter(e): btn["bg"] = COLOR_BTN_ACTIVE
+    def on_leave(e): btn["bg"] = bg
+    btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
+                    activebackground=COLOR_BTN_ACTIVE, activeforeground=fg,
+                    font=font, bd=0, relief="flat", highlightthickness=0,
+                    padx=18, pady=10, cursor="hand2")
+    btn.pack_propagate(0)
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
+    return btn
+
+def draw_slider(parent, var, width=220, height=36):
+    canvas = tk.Canvas(parent, width=width, height=height, bg=COLOR_BG, highlightthickness=0)
+    slider_length = width - 40
+    slider_height = 8
+    slider_radius = 13
+
+    def redraw(val):
+        canvas.delete("all")
+        # Track (background)
+        y = height // 2
+        canvas.create_line(20, y, 20 + slider_length, y, fill=COLOR_SLIDER_BG, width=slider_height, capstyle="round")
+        # Track (filled)
+        end = 20 + slider_length * (val / 100)
+        canvas.create_line(20, y, end, y, fill=COLOR_SLIDER, width=slider_height, capstyle="round")
+        # Thumb (arrondi)
+        handle_x = end
+        canvas.create_oval(handle_x - slider_radius, y - slider_radius,
+                           handle_x + slider_radius, y + slider_radius,
+                           fill=COLOR_SLIDER, outline=COLOR_SLIDER)
+    def click(event):
+        x = min(max(event.x, 20), 20 + slider_length)
+        val = int(100 * (x - 20) / slider_length)
+        var.set(val)
+        redraw(val)
+        showvol.set(f"{val}%")
+    canvas.bind("<Button-1>", click)
+    canvas.bind("<B1-Motion>", click)
+    redraw(var.get())
+    canvas.pack()
+    return canvas, redraw
+
 fenetre = tk.Tk()
 fenetre.title("Minuteur Moderne")
-fenetre.geometry("390x370")
-fenetre.configure(bg="#20232a")
+fenetre.configure(bg=COLOR_BG)
+fenetre.minsize(400, 570)
 
-style = ttk.Style()
-style.theme_use("clam")
-style.configure("TFrame", background="#282c34")
-style.configure("TLabel", background="#282c34", foreground="#ededed", font=("Segoe UI", 13))
-style.configure("TButton", font=("Segoe UI", 13, "bold"), padding=10, borderwidth=0, relief="flat")
-style.configure("Accent.TButton", background="#3fa8f4", foreground="#fff", borderwidth=0, relief="flat")
-style.map("Accent.TButton",
-    background=[("active", "#3291d7"), ("!active", "#3fa8f4")],
-    foreground=[("active", "#fff")])
-style.configure("Big.TLabel", background="#282c34", foreground="#fff", font=("Segoe UI", 38, "bold"))
-style.configure("Volume.TLabel", background="#282c34", foreground="#7fc4f7", font=("Segoe UI", 18, "bold"))
+# Responsive font sizes
+def get_sizes():
+    h = fenetre.winfo_height()
+    f_big = max(18, int(h/13))
+    f_norm = max(12, int(h/34))
+    f_btn = max(13, int(h/28))
+    entry_w = 260
+    entry_h = max(38, int(h/13))
+    btn_w = max(120, int(h/4))
+    btn_h = max(38, int(h/13))
+    slider_w = 260
+    slider_h = max(36, int(h/15))
+    return f_big, f_norm, f_btn, entry_w, entry_h, btn_w, btn_h, slider_w, slider_h
 
-frame = ttk.Frame(fenetre, padding=30, style="TFrame")
-frame.place(relx=0.5, rely=0.5, anchor="center")
+# --- TIMER ---
+timer_var = tk.StringVar(value="Arrêté")
+def update_timer(val): timer_var.set(val)
 
-timer_var = tk.StringVar()
-timer_var.set("Arrêté")
-timer_label = ttk.Label(frame, textvariable=timer_var, style="Big.TLabel")
-timer_label.pack(pady=(0, 28))
+timer_frame = tk.Frame(fenetre, bg=COLOR_BG)
+timer_frame.pack(fill="x", pady=(25,10))
+timer_label = tk.Label(timer_frame, textvariable=timer_var, bg=COLOR_CARD, fg=COLOR_TEXT,
+                       font=("Segoe UI", 38, "bold"), justify="center", pady=18, padx=20, relief="flat")
+timer_label.pack(pady=8, ipadx=8, ipady=5, anchor="center", fill="x")
+timer_label.config(borderwidth=0, highlightbackground=COLOR_BORDER, highlightcolor=COLOR_BORDER, highlightthickness=2)
 
-def entry_style(entry):
-    entry.configure(font=("Segoe UI", 13), justify="center")
-    entry.pack(fill="x", pady=6, ipady=3)
+# --- CHAMPS DUREE/DECOMPTE ---
+fields_frame = tk.Frame(fenetre, bg=COLOR_BG)
+fields_frame.pack(pady=(4, 12), fill="x")
 
-ttk.Label(frame, text="Décompte (s)").pack(anchor="w")
-entry_attente = ttk.Entry(frame)
-entry_attente.insert(0, str(DELAI_PAR_DEFAUT))
-entry_style(entry_attente)
+attente_var = tk.StringVar(value="210")
+attente_label = tk.Label(fields_frame, text="Décompte (s)", bg=COLOR_BG, fg=COLOR_TEXT, font=("Segoe UI", 14, "bold"))
+attente_label.pack(anchor="center")
+attente_frame, entry_attente = rounded_entry(fields_frame, attente_var, ("Segoe UI", 18, "bold"))
+attente_frame.pack(pady=5, padx=30, fill="x")
 
-ttk.Label(frame, text="Durée bip (s)").pack(anchor="w")
-entry_duree = ttk.Entry(frame)
-entry_duree.insert(0, str(DUREE_BIP_PAR_DEFAUT))
-entry_style(entry_duree)
+duree_var = tk.StringVar(value="5")
+duree_label = tk.Label(fields_frame, text="Durée bip (s)", bg=COLOR_BG, fg=COLOR_TEXT, font=("Segoe UI", 14, "bold"))
+duree_label.pack(anchor="center")
+duree_frame, entry_duree = rounded_entry(fields_frame, duree_var, ("Segoe UI", 18, "bold"))
+duree_frame.pack(pady=5, padx=30, fill="x")
 
-# Slider volume moderne et fin avec pourcentage centré
-def maj_volume(val):
-    volume_show.set(f"{int(float(val))}%")
+# --- SLIDER ---
+slider_frame = tk.Frame(fenetre, bg=COLOR_BG)
+slider_frame.pack(pady=(12,4))
+volume_label = tk.Label(slider_frame, text="Volume", bg=COLOR_BG, fg=COLOR_TEXT, font=("Segoe UI", 14, "bold"))
+volume_label.pack(anchor="center")
+volume_var = tk.DoubleVar(value=100)
+showvol = tk.StringVar(value="100%")
+slider_canvas, slider_redraw = draw_slider(slider_frame, volume_var, 260, 38)
+tk.Label(slider_frame, textvariable=showvol, bg=COLOR_BG, fg=COLOR_TEXT, font=("Segoe UI", 15, "bold")).pack(anchor="center", pady=(0,6))
 
-ttk.Label(frame, text="Volume").pack(anchor="w", pady=(5,0))
-slider_frame = ttk.Frame(frame, style="TFrame")
-slider_frame.pack(fill="x")
+# --- BOUTONS SON DU BIP ---
+beep_style_var = tk.StringVar(value="classique")
+beep_frame = tk.Frame(fenetre, bg=COLOR_BG)
+beep_frame.pack(pady=(0, 10))
+tk.Label(beep_frame, text="Son du bip", bg=COLOR_BG, fg=COLOR_TEXT, font=("Segoe UI", 14, "bold")).pack(anchor="center")
+bip_choix = tk.Frame(beep_frame, bg=COLOR_BG)
+bip_choix.pack()
+def style_btn(val, btn):
+    def select():
+        beep_style_var.set(val)
+        for b in btns_bip:
+            b.config(bg=COLOR_CARD, fg=COLOR_TEXT)
+        btn.config(bg=COLOR_BTN, fg=COLOR_TEXT)
+    return select
+btns_bip = []
+for name, label in [("classique", "Classique"), ("court", "Court"), ("long", "Long")]:
+    btn = tk.Button(bip_choix, text=label, bg=COLOR_BTN if name=="classique" else COLOR_CARD,
+                    fg=COLOR_TEXT, font=("Segoe UI", 13, "bold"),
+                    bd=0, padx=18, pady=8, relief="flat", highlightthickness=0,
+                    activebackground=COLOR_BTN_ACTIVE, activeforeground=COLOR_TEXT,
+                    command=style_btn(name, None))
+    btns_bip.append(btn)
+    btn.pack(side="left", padx=7)
+for i, btn in enumerate(btns_bip):
+    btn.config(command=style_btn(["classique", "court", "long"][i], btn))
 
-scale_volume = tk.Scale(slider_frame, from_=0, to=100, orient=tk.HORIZONTAL, showvalue=0,
-                        length=220, command=maj_volume, sliderlength=14, width=5,
-                        bg="#282c34", highlightthickness=0, troughcolor="#3fa8f4",
-                        bd=0, fg="#fff", activebackground="#7fc4f7")
-scale_volume.set(VOLUME_PAR_DEFAUT)
-scale_volume.pack(pady=(2, 0), padx=10)
-volume_show = tk.StringVar(value=f"{VOLUME_PAR_DEFAUT}%")
-volume_label = ttk.Label(frame, textvariable=volume_show, style="Volume.TLabel", anchor="center")
-volume_label.pack(pady=(0, 12))
-
-btns = ttk.Frame(frame, style="TFrame")
-btns.pack(pady=(10,0))
-
+# --- BOUTONS PRINCIPAUX ---
+btns = tk.Frame(fenetre, bg=COLOR_BG)
+btns.pack(pady=20)
 alarme = Alarme()
-ttk.Button(btns, text="Démarrer", command=alarme.demarrer, style="Accent.TButton").pack(side="left", padx=7)
-ttk.Button(btns, text="Arrêter", command=alarme.arreter).pack(side="left", padx=7)
+start_btn = rounded_button(
+    btns, "Démarrer", alarme.demarrer, ("Segoe UI", 16, "bold"),
+    bg=COLOR_BTN, fg=COLOR_TEXT
+)
+start_btn.pack(side="left", padx=14, ipadx=12, ipady=6)
+stop_btn = rounded_button(
+    btns, "Arrêter", alarme.arreter, ("Segoe UI", 16, "bold"),
+    bg=COLOR_CARD, fg=COLOR_TEXT
+)
+stop_btn.pack(side="left", padx=14, ipadx=12, ipady=6)
 
-# Message discret si pygame n'est pas installé
-if not HAS_PYGAME:
-    txt = "Astuce : installe pygame et ajoute bip.wav pour régler le volume du bip."
-    ttk.Label(frame, text=txt, font=("Segoe UI", 8), foreground="#6a7b8a", background="#282c34").pack(pady=(14,0))
+# --- RESPONSIVE auto FONT & ELEMENTS ---
+def on_resize(event=None):
+    f_big, f_norm, f_btn, entry_w, entry_h, btn_w, btn_h, slider_w, slider_h = get_sizes()
+    timer_label.config(font=("Segoe UI", f_big, "bold"), padx=20, pady=18)
+    attente_label.config(font=("Segoe UI", f_norm, "bold"))
+    duree_label.config(font=("Segoe UI", f_norm, "bold"))
+    entry_attente.config(font=("Segoe UI", f_btn, "bold"))
+    entry_duree.config(font=("Segoe UI", f_btn, "bold"))
+    volume_label.config(font=("Segoe UI", f_norm, "bold"))
+    for b in btns_bip:
+        b.config(font=("Segoe UI", f_btn, "bold"), padx=18, pady=8)
+    start_btn.config(font=("Segoe UI", f_btn+2, "bold"), padx=22, pady=10)
+    stop_btn.config(font=("Segoe UI", f_btn+2, "bold"), padx=22, pady=10)
+    slider_canvas.config(width=slider_w, height=slider_h)
+    slider_redraw(volume_var.get())
+fenetre.bind("<Configure>", on_resize)
+fenetre.after(300, on_resize)
 
 fenetre.mainloop()
